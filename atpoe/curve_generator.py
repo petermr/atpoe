@@ -3,6 +3,7 @@ import math
 import random
 from PIL import Image, ImageDraw
 import io
+from .config_loader import load_config
 
 # Simple graphics bundle system
 class SimpleGraphicsBundle:
@@ -21,8 +22,19 @@ def generate_initial_circle(center_x: float, center_y: float, radius: float, num
         points.append((x, y))
     return points
 
-def generate_nested_curve_simple(outer_curve, distance: float, error: float, min_separation: float = 1.0):
-    """Generate a nested curve by moving points inward with error, ensuring minimum separation."""
+def generate_nested_curve_simple(outer_curve, distance: float, error: float, min_separation: float = 1.0, segment_length: float = 20.0):
+    """
+    Generate a nested curve by moving points inward with error, ensuring minimum separation.
+    
+    Date: 2024-12-19
+    Description: Generate closed curve with config-validated segment length control and closure handling.
+    """
+    # Load configuration and validate segment length
+    config = load_config()
+    min_len, max_len = config.get_segment_length_range()
+    
+    if not (min_len <= segment_length <= max_len):
+        raise ValueError(f"Segment length {segment_length} outside config range {min_len}-{max_len}")
     if not outer_curve or len(outer_curve) < 3:
         return []
     
@@ -31,6 +43,8 @@ def generate_nested_curve_simple(outer_curve, distance: float, error: float, min
     center_y = sum(p[1] for p in outer_curve) / len(outer_curve)
     
     new_curve = []
+    current_point = outer_curve[0]  # Start with first point
+    
     for i, point in enumerate(outer_curve):
         # Calculate direction from center to point
         dx = point[0] - center_x
@@ -55,12 +69,57 @@ def generate_nested_curve_simple(outer_curve, distance: float, error: float, min
             error_x = random.uniform(-error, error)
             error_y = random.uniform(-error, error)
         
-        new_curve.append((new_x + error_x, new_y + error_y))
+        new_point = (new_x + error_x, new_y + error_y)
+        
+        # Check if this point is at proper segment length from current point
+        if i > 0:
+            current_distance = math.sqrt((new_point[0] - current_point[0])**2 + (new_point[1] - current_point[1])**2)
+            if current_distance > segment_length * 1.5:  # Allow some flexibility
+                # Interpolate to maintain segment length
+                ratio = segment_length / current_distance
+                new_point = (
+                    current_point[0] + (new_point[0] - current_point[0]) * ratio,
+                    current_point[1] + (new_point[1] - current_point[1]) * ratio
+                )
+        
+        new_curve.append(new_point)
+        current_point = new_point
     
     # RULE 1: Ensure the curve closes without gaps
     if len(new_curve) > 2:
-        # Force the last point to be exactly the same as the first point
-        new_curve[-1] = new_curve[0]
+        # Check distance from last to first point
+        last_to_first_distance = math.sqrt(
+            (new_curve[-1][0] - new_curve[0][0])**2 + 
+            (new_curve[-1][1] - new_curve[0][1])**2
+        )
+        
+        if last_to_first_distance <= segment_length * 1.2:  # Close enough to close
+            # Force the last point to be exactly the same as the first point
+            new_curve[-1] = new_curve[0]
+        else:
+            # Add intermediate points to close properly
+            while last_to_first_distance > segment_length:
+                # Add point at segment length from last point towards first
+                dx = new_curve[0][0] - new_curve[-1][0]
+                dy = new_curve[0][1] - new_curve[-1][1]
+                length = math.sqrt(dx*dx + dy*dy)
+                if length > 0:
+                    ratio = segment_length / length
+                    new_point = (
+                        new_curve[-1][0] + dx * ratio,
+                        new_curve[-1][1] + dy * ratio
+                    )
+                    new_curve.append(new_point)
+                    last_to_first_distance = math.sqrt(
+                        (new_point[0] - new_curve[0][0])**2 + 
+                        (new_point[1] - new_curve[0][1])**2
+                    )
+                else:
+                    break
+            
+            # Final closure
+            if last_to_first_distance <= segment_length * 1.2:
+                new_curve[-1] = new_curve[0]
     
     return new_curve
 
@@ -85,7 +144,12 @@ def check_curve_inside_outer(inner_curve, outer_curve):
     return True
 
 def draw_curves_simple(draw, curves, bundle):
-    """Draw curves using the specified graphics bundle."""
+    """
+    Draw curves using the specified graphics bundle.
+    
+    Date: 2024-12-19
+    Description: Draw curves with config-based drawing settings.
+    """
     if not curves:
         return
     
@@ -152,7 +216,10 @@ def main():
         num_curves = st.slider("Number of Curves", 1, 30, 3, key="curves_slider")
         error_level = st.slider("Error Level", 0.0, 6.0, 1.5, 0.1, key="error_slider")
         curve_distance = st.slider("Curve Separation", 0.0, 15.0, 8.0, 0.1, key="distance_slider")
-        segment_length = st.slider("Segment Length", 1.0, 15.0, 3.0, 0.1, key="segment_slider")
+        # Load config for segment length constraints
+        config = load_config()
+        min_len, max_len = config.get_segment_length_range()
+        segment_length = st.slider("Segment Length", float(min_len), float(max_len), 3.0, 0.1, key="segment_slider")
         min_inter_curve = st.slider("Minimum Inter-Curve", 1.0, 4.0, 1.0, 0.1, key="inter_curve_slider")
         canvas_size = st.selectbox("Canvas Size", [800, 1000, 1200, 1500], index=1, key="canvas_slider")
         

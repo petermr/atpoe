@@ -1,0 +1,48 @@
+# AtPoE (Admitting the Possibilities of Error) Configuration File
+
+# Initial circle configuration
+initial_circle:
+  color: "red"
+  width: 3
+  style: "solid"
+  visible: true
+
+# Background configuration
+background:
+  color: "white"
+  fill_enabled: true
+
+# Antialiasing configuration
+antialiasing:
+  enabled: true
+  quality: "high"  # low, medium, high
+
+# Segment length configuration
+segment_length:
+  scale_factor: 1.0
+  min_value: 3
+  max_value: 30
+
+# Tangent-based curve generation configuration
+curve_generation:
+  tangent_method: "3_point_average"  # 3_point_average, simple, weighted
+  sharp_point_threshold: 45.0  # degrees - angle deviation to detect sharp points
+  linear_extension_length: 10.0  # pixels - how far to extend linearly for convex sharp points
+  parallel_tracking_distance: 8.0  # pixels - distance for concave sharp point handling
+
+# Drawing configuration
+drawing:
+  line_join: "round"  # round, bevel, miter
+  line_cap: "round"   # round, square, butt
+
+# Graphics bundle configuration
+graphics_bundle:
+  default_bundle: "Classic Black"
+  save_custom_bundles: true
+  bundle_storage_path: "custom_bundles"
+
+# Output configuration
+output:
+  format: "png"  # png, jpg, svg
+  quality: 95
+  dpi: 300

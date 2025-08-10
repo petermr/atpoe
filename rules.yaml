@@ -1,0 +1,276 @@
+# AtPoE (Admitting the Possibilities of Error) - Project Rules
+# Date: 2024-12-19
+# Description: Core rules and constraints for curve generation algorithms
+
+# ============================================================================
+# CORE PROJECT RULES
+# ============================================================================
+
+core_rules:
+  rule_0:
+    name: "Algorithm Simplicity"
+    description: "Use simple, understandable algorithms without complex mathematics"
+    constraints:
+      - "No advanced trigonometry beyond basic cos/sin for direction calculation"
+      - "No direct geometric placement - use iterative movement approach"
+      - "Prefer incremental forward movement over global calculations"
+      - "Algorithm must be explainable to non-mathematicians"
+    
+  rule_1:
+    name: "Curve Closure"
+    description: "Closed curves must close without gaps"
+    requirements:
+      - "Last point must equal first point for closed curves"
+      - "Add intermediate points if gap too large before forcing closure"
+      - "Closure segment length must not exceed 1.2 * target_segment_length"
+      - "Polylines (open curves) do NOT require closure"
+    implementation: "Force new_curve[-1] = new_curve[0] when closing"
+    
+  rule_2:
+    name: "Segment Length Control"
+    description: "Proceed forward by specified segment length"
+    requirements:
+      - "All segments should target the specified segment_length"
+      - "Reference curves must be generated with same segment_length as target"
+      - "Use iterative forward movement along curve direction"
+      - "Maintain segment length accuracy within acceptable tolerance"
+      - "Segment length must be within config constraints (3-30 pixels)"
+    critical: "BOTH reference and generated curves must use identical segment_length"
+    tolerance: "±20% of target segment length"
+    
+  rule_3:
+    name: "Curve Containment"
+    description: "Inner curves must be completely inside outer curves"
+    requirements:
+      - "No overlap between nested curves"
+      - "Maintain specified distance from outer curve"
+      - "Use proper inside/outside detection (ray casting)"
+      - "Ensure containment hierarchy is preserved"
+      
+  rule_4:
+    name: "Curve Separation and Non-Crossing"
+    description: "Curves must maintain minimum separation and never cross"
+    requirements:
+      - "Generated curves must never get closer than minimum_curve_separation"
+      - "Generated curves must NEVER cross the original reference curve"
+      - "Generated curves must NEVER cross each other (when multiple curves exist)"
+      - "Maintain safety margin at all times during generation"
+    critical: "ABSOLUTE PROHIBITION - No crossing under any circumstances"
+    validation: "Check minimum distance between all curve pairs"
+    enforcement: "Algorithm must reject points that violate separation rules"
+
+# ============================================================================
+# ALGORITHM CONSTRAINTS
+# ============================================================================
+
+algorithm_constraints:
+  mathematical:
+    - "No advanced trigonometry (limit to basic cos/sin)"
+    - "No direct geometric placement"
+    - "No complex curve fitting algorithms"
+    - "Prefer linear interpolation over polynomial fitting"
+    
+  movement:
+    - "Use iterative forward movement approach"
+    - "Calculate tangent direction using 3-point average method"
+    - "Move inward via perpendicular normal to tangent"
+    - "Proceed forward by segment_length distance"
+    
+  geometric:
+    - "Use Euclidean distance calculations (math.hypot allowed)"
+    - "Ray casting for inside/outside point detection"
+    - "Center-based inward direction as fallback method"
+    - "Maintain minimum separation distances"
+    
+  safety_constraints:
+    - "Check minimum_curve_separation before placing each point"
+    - "Reject candidate points that violate separation rules"
+    - "Never allow crossing between any curves"
+    - "Implement distance validation at every step"
+
+# ============================================================================
+# CURVE FOLLOWING ALGORITHM RULES
+# ============================================================================
+
+curve_following:
+  process:
+    1: "Start at beginning of original curve"
+    2: "Calculate tangent direction at current position"
+    3: "Find inward normal (perpendicular to tangent, pointing inside)"
+    4: "Move current point inward by specified distance"
+    5: "From new inward point, move forward by segment_length"
+    6: "Repeat until curve is complete"
+    
+  tangent_calculation:
+    method: "3_point_average"
+    description: "Use previous, current, and next points to calculate smooth tangent"
+    fallback: "Use center-to-point direction if insufficient points"
+    
+  inward_normal:
+    calculation: "Two perpendicular options: (ty, -tx) and (-ty, tx)"
+    selection: "Choose normal that points more toward curve center"
+    method: "Dot product with center direction vector"
+    
+  forward_movement:
+    strategy: "Move along original curve by segment_length distance"
+    interpolation: "Linear interpolation between curve points"
+    wraparound: "Handle curve endpoints appropriately"
+
+# ============================================================================
+# VALIDATION RULES
+# ============================================================================
+
+validation:
+  segment_length:
+    accuracy_target: ">90% within tolerance"
+    measurement: "Calculate actual vs target segment lengths"
+    statistics: "Track min, max, average, standard deviation"
+    
+  curve_quality:
+    closure_check: "Verify proper closure for closed curves"
+    containment_check: "Ensure inner curves stay inside outer curves"
+    crossing_check: "No segments should cross original curve"
+    
+  separation_safety:
+    minimum_distance_check: "Verify minimum_curve_separation maintained at all points"
+    crossing_detection: "Use line segment intersection algorithms to detect crossings"
+    proximity_alert: "Flag points approaching minimum separation threshold"
+    validation_frequency: "Check every generated point against all existing curves"
+    
+  visual_validation:
+    required: true
+    method: "Generate visual diagrams for manual inspection"
+    output: "PNG files in temp/ directory"
+    coverage: "Test multiple geometric shapes (straight, convex, concave, spikes)"
+
+# ============================================================================
+# REFERENCE CURVE GENERATION
+# ============================================================================
+
+reference_curves:
+  segment_length_requirement:
+    rule: "Reference curves MUST be generated with target segment_length"
+    rationale: "Ensures fair comparison between original and generated curves"
+    implementation: "generate_line_by_angles(angular_deviations, start_point, segment_length, num_points)"
+    
+  consistency:
+    reference_segments: "All segments in reference curve = segment_length"
+    generated_segments: "All segments in generated curve ≈ segment_length"
+    comparison: "Both curves use identical segment_length parameter"
+    
+  validation:
+    before_test: "Verify reference curve has correct segment lengths"
+    during_test: "Generate new curve with same segment_length"
+    after_test: "Compare actual vs target for both curves"
+
+# ============================================================================
+# TEST CASES
+# ============================================================================
+
+test_cases:
+  geometric_shapes:
+    - name: "Straight"
+      angular_deviations: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+      expected: "Parallel line with consistent segment lengths"
+      
+    - name: "Convex"
+      angular_deviations: [10, 10, 10, 10, 10, 10, 10, 10, 10]
+      expected: "Smooth curved following with inward bias"
+      
+    - name: "Concave"
+      angular_deviations: [-10, -10, -10, -10, -10, -10, -10, -10, -10]
+      expected: "Smooth curved following with outward bias"
+      
+    - name: "Fast Wiggly"
+      angular_deviations: [10, -10, 10, -10, 10, -10, 10, -10, 10]
+      expected: "Rapid direction changes, algorithm should smooth"
+      
+    - name: "Spikes"
+      angular_deviations: [0, 0, 0, 60, -120, 60, 0, 0, 0]
+      expected: "Handle sharp discontinuities gracefully"
+      
+  pathological_cases:
+    - "Very pointed curves (sharp spikes)"
+    - "Deep concave sections"
+    - "Irregular random shapes" 
+    - "Narrow passages"
+    - "Star shapes with multiple spikes"
+
+# ============================================================================
+# CONFIGURATION INTEGRATION
+# ============================================================================
+
+config_requirements:
+  segment_length:
+    source: "config.yaml - segment_length section"
+    validation: "All algorithms must respect min_value/max_value constraints"
+    range: "3-30 pixels (configurable)"
+    
+  curve_separation:
+    parameter: "minimum_curve_separation"
+    purpose: "Enforced minimum distance between any two curves"
+    validation: "Must be positive value, typically 1-5 pixels"
+    usage: "Check before placing every generated point"
+    
+  output_settings:
+    format: "PNG (from config.yaml)"
+    quality: "95% (from config.yaml)" 
+    dpi: "300 (from config.yaml)"
+    location: "temp/ directory only"
+    
+  curve_generation:
+    tangent_method: "3_point_average (from config.yaml)"
+    sharp_point_threshold: "45.0 degrees"
+    distance_tracking: "8.0 pixels for concave handling"
+
+# ============================================================================
+# STYLE COMPLIANCE
+# ============================================================================
+
+style_requirements:
+  file_operations:
+    - "Use pathlib.Path with constructor arguments: Path('temp', 'filename')"
+    - "Never use os.getcwd() or Path.cwd()"
+    - "Never use '/' operator with Path"
+    - "All outputs must go to temp/ directory or descendants"
+    
+  code_quality:
+    - "Every function must have date stamp and one-line description"
+    - "All tests must have assertions (use pytest.approx for floats)"
+    - "No sys.path.append() anywhere"
+    - "Use absolute imports with module prefix"
+    
+  validation:
+    - "Test all new code before use"
+    - "Make incremental changes"
+    - "Ask permission before major modifications"
+    - "Validate against config constraints"
+
+# ============================================================================
+# SUCCESS CRITERIA
+# ============================================================================
+
+success_criteria:
+  algorithm_performance:
+    segment_accuracy: ">80% within tolerance (aim for >95%)"
+    visual_quality: "Manual inspection passes"
+    curve_following: "New segments follow original curve contour"
+    no_crossings: "Generated segments never cross original curve"
+    reference_consistency: "Reference curves must have uniform segment_length"
+    minimum_separation: "All curves maintain minimum_curve_separation distance"
+    
+  safety_compliance:
+    zero_crossings: "ZERO tolerance for curve crossings"
+    separation_maintained: "100% compliance with minimum_curve_separation"
+    distance_validation: "All points validated before acceptance"
+    
+  known_issues:
+    fast_wiggly: "Rapid direction changes cause algorithm failure (-399.6% accuracy)"
+    spike_handling: "Sharp spikes produce irregular segment lengths"
+    edge_transitions: "First/last segments often show length variations"
+    
+  technical_compliance:
+    config_integration: "All settings from config.yaml respected"
+    style_compliance: "No STYLE violations"
+    test_coverage: "All geometric cases tested"
+    path_safety: "All file operations within project boundaries"
