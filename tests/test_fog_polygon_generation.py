@@ -6,27 +6,20 @@ Description: Test for generating a single inner polygon using fog-based algorith
 import pytest
 import numpy as np
 from pathlib import Path
-import matplotlib.pyplot as plt
 import time
 
 from atpoe.curve_generator import generate_initial_circle
 
 # Test parameters
-SEGMENT_LENGTH = 1.0
+SEGMENT_LENGTH = 2.0
 TARGET_SEPARATION = 3.0
 MIN_SEPARATION = 2.0
 MAX_SEPARATION = 4.0
 INTER_CURVE_DISTANCE = 3.0  # Start exactly 3 units inside bounding polygon
-MAX_POINTS_PER_POLYGON = 2000  # Safety limit for points (much higher)
+MAX_POINTS_PER_POLYGON = 4000  # Dynamic limit based on circumference (increased for smaller segment length)
 MAX_TIME_SECONDS = 30  # Safety limit for execution time
 NUM_CURVES = 1
 
-
-def bounding_polygon(centre, radius, npoints):
-    """
-
-    """
-    return generate_initial_circle(center_x=centre[0], center_y=centre[1], radius=radius, num_points=npoints)
 
 
 def test_generate_single_inner_polygon():
@@ -35,7 +28,10 @@ def test_generate_single_inner_polygon():
     Description: Test generating a single inner polygon inside a bounding polygon
     """
     # Generate bounding polygon (outer curve)
-    outer_polygon = bounding_polygon(centre=(500, 500), radius=500, npoints=1000)
+    R = 500
+    npoints = 1000 
+    outer_polygon = generate_initial_circle(center_x=R, center_y=R, radius=R, 
+                                            num_points=npoints)
     
     # Start timing
     start_time = time.time()
@@ -94,6 +90,59 @@ def test_generate_single_inner_polygon():
                 unique_points.append(point)
         print(f"DEBUG: Unique points: {len(unique_points)}")
         
+        # Test: Ensure first and second points have approximately equal separation from outer curve
+        if len(unique_points) >= 2:
+            from atpoe.fog_polygon_generator import calculate_distance_to_polygon
+            first_point = unique_points[0]
+            second_point = unique_points[1]
+            
+            first_separation = calculate_distance_to_polygon(first_point, outer_polygon)
+            second_separation = calculate_distance_to_polygon(second_point, outer_polygon)
+            
+            print(f"DEBUG: First point separation: {first_separation:.2f}")
+            print(f"DEBUG: Second point separation: {second_separation:.2f}")
+            
+            # Assert that separations are approximately equal (within 10% of target separation)
+            separation_tolerance = TARGET_SEPARATION * 0.1
+            assert abs(first_separation - second_separation) <= separation_tolerance, \
+                f"First and second points have significantly different separations: " \
+                f"first={first_separation:.2f}, second={second_separation:.2f}, " \
+                f"difference={abs(first_separation - second_separation):.2f}, " \
+                f"tolerance={separation_tolerance:.2f}"
+        
+        # Test: Ensure all consecutive segments maintain direction continuity using DEGREES
+        if len(unique_points) >= 3:
+            print("DEBUG: Checking direction continuity for all segments (using degrees):")
+            
+            for i in range(1, len(unique_points) - 1):
+                prev_point = unique_points[i-1]
+                curr_point = unique_points[i]
+                next_point = unique_points[i+1]
+                
+                # Calculate direction vectors
+                import math
+                vec_prev_x = curr_point[0] - prev_point[0]
+                vec_prev_y = curr_point[1] - prev_point[1]
+                vec_curr_x = next_point[0] - curr_point[0]
+                vec_curr_y = next_point[1] - curr_point[1]
+                
+                # Calculate angles
+                prev_angle = math.degrees(math.atan2(vec_prev_y, vec_prev_x))
+                curr_angle = math.degrees(math.atan2(vec_curr_y, vec_curr_x))
+                
+                # Calculate turn angle (handle angle wrapping)
+                turn_angle = abs(curr_angle - prev_angle)
+                if turn_angle > 180:
+                    turn_angle = 360 - turn_angle
+                
+                print(f"  Segment {i}: {prev_point} -> {curr_point} -> {next_point}, turn_angle = {turn_angle:.1f}°")
+                
+                # Assert that turn angle is reasonable (should be < 30 degrees for very smooth curves)
+                # Allow some flexibility for pathological cases
+                assert turn_angle < 30.0, \
+                    f"Segment {i} has too sharp a turn: " \
+                    f"turn_angle = {turn_angle:.1f}° (should be < 30°)"
+        
         print("DEBUG: About to create success visualization...")
         # Generate success visualization
         create_success_visualization(outer_polygon, inner_polygon, elapsed_time)
@@ -132,92 +181,120 @@ def test_generate_single_inner_polygon():
 def create_success_visualization(outer_polygon, inner_polygon, elapsed_time):
     """
     Date: 2025-08-10
-    Description: Create visualization for successful polygon generation
+    Description: Create visualization for successful polygon generation using direct SVG
     """
-    fig, ax = plt.subplots(figsize=(12, 10))
-    
-    # Plot outer polygon (thinner to avoid overlap issues)
-    outer_x, outer_y = zip(*outer_polygon)
-    ax.plot(outer_x + (outer_x[0],), outer_y + (outer_y[0],), 
-            'b-', linewidth=0.5, alpha=0.7, label='Outer Polygon (Bounding)')
-    
-    # Plot inner polygon (thinner line)
-    inner_x, inner_y = zip(*inner_polygon)
-    ax.plot(inner_x + (inner_x[0],), inner_y + (inner_y[0],), 
-            'g-', linewidth=0.5, alpha=1.0, label='Inner Polygon (Generated)')
-    
-    # Plot points (smaller for outer, larger for inner)
-    ax.plot(outer_x, outer_y, 'bo', markersize=1, alpha=0.5)
-    ax.plot(inner_x, inner_y, 'go', markersize=4, alpha=1.0)
-    
-    # Add center point (for reference)
-    ax.plot(500, 500, 'k*', markersize=10, label='Reference Point')
-    
-    # Labels and title
-    ax.set_xlabel('X Coordinate')
-    ax.set_ylabel('Y Coordinate')
-    ax.set_title(f'✅ SUCCESS: Fog-Based Polygon Generation\n'
-                f'Segment Length: {SEGMENT_LENGTH}, Target Separation: {TARGET_SEPARATION}\n'
-                f'Execution Time: {elapsed_time:.2f}s, Points: {len(inner_polygon)}')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    ax.set_aspect('equal')
-    
-    # Save to project temp directory
-    output_file = Path("temp", "test_generate_single_inner_polygon.png")
-    output_file.parent.mkdir(exist_ok=True)
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    
-    # Also save as SVG
+    # Create SVG with proper viewBox and styling
     svg_file = Path("temp", "test_generate_single_inner_polygon.svg")
-    plt.savefig(svg_file, format='svg', bbox_inches='tight')
-    plt.close()
     
-    print(f"📊 Success visualization saved to: {output_file}")
+    # Calculate bounding box for proper viewBox
+    all_points = outer_polygon + inner_polygon
+    min_x = min(p[0] for p in all_points) - 50
+    max_x = max(p[0] for p in all_points) + 50
+    min_y = min(p[1] for p in all_points) - 50
+    max_y = max(p[1] for p in all_points) + 50
+    width = max_x - min_x
+    height = max_y - min_y
+    
+    with open(svg_file, 'w') as f:
+        f.write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{min_x} {min_y} {width} {height}">\n')
+        
+        # Add grid (optional, for reference)
+        grid_size = 100
+        for x in range(int(min_x), int(max_x) + grid_size, grid_size):
+            f.write(f'    <line x1="{x}" y1="{min_y}" x2="{x}" y2="{max_y}" stroke="#f0f0f0" stroke-width="0.5"/>\n')
+        for y in range(int(min_y), int(max_y) + grid_size, grid_size):
+            f.write(f'    <line x1="{min_x}" y1="{y}" x2="{max_x}" y2="{y}" stroke="#f0f0f0" stroke-width="0.5"/>\n')
+        
+        # Outer polygon (blue, thin line)
+        outer_coords = ' '.join([f"{x},{y}" for x, y in outer_polygon])
+        f.write(f'    <polygon points="{outer_coords}" fill="none" stroke="blue" stroke-width="2" opacity="0.7"/>\n')
+        
+        # Inner polygon (red, very thin line)
+        inner_coords = ' '.join([f"{x},{y}" for x, y in inner_polygon[:-1]])  # Exclude duplicate start point
+        f.write(f'    <polygon points="{inner_coords}" fill="none" stroke="red" stroke-width="0.5"/>\n')
+        
+        # Add title and labels
+        f.write(f'    <text x="{min_x + 20}" y="{min_y + 30}" font-family="Arial" font-size="16" fill="black">')
+        f.write(f'✅ SUCCESS: Fog-Based Polygon Generation</text>\n')
+        f.write(f'    <text x="{min_x + 20}" y="{min_y + 50}" font-family="Arial" font-size="12" fill="black">')
+        f.write(f'Segment Length: {SEGMENT_LENGTH}, Target Separation: {TARGET_SEPARATION}</text>\n')
+        f.write(f'    <text x="{min_x + 20}" y="{min_y + 70}" font-family="Arial" font-size="12" fill="black">')
+        f.write(f'Execution Time: {elapsed_time:.2f}s, Points: {len(inner_polygon)}</text>\n')
+        
+        f.write('</svg>\n')
+    
+    # Convert SVG to PNG using a simple approach (if available)
+    png_file = Path("temp", "test_generate_single_inner_polygon.png")
+    try:
+        # Try to use cairosvg if available for high-quality conversion
+        import cairosvg
+        cairosvg.svg2png(url=str(svg_file), write_to=str(png_file), output_width=1200, output_height=1000)
+        print(f"📊 PNG visualization saved to: {png_file} (using cairosvg)")
+    except ImportError:
+        # Fallback: just save SVG and inform user
+        print(f"📊 SVG visualization saved to: {svg_file}")
+        print("💡 To convert to PNG, install cairosvg: pip install cairosvg")
+        print("   Or open the SVG in a browser and save as PNG")
+    
     print(f"📊 SVG visualization saved to: {svg_file}")
 
 def create_failure_visualization(outer_polygon, error_message, elapsed_time):
     """
     Date: 2025-08-10
-    Description: Create visualization for failed polygon generation
+    Description: Create visualization for failed polygon generation using direct SVG
     """
-    fig, ax = plt.subplots(figsize=(12, 10))
+    # Create SVG with proper viewBox and styling
+    svg_file = Path("temp", "test_generate_single_inner_polygon.svg")
     
-    # Plot outer polygon
-    outer_x, outer_y = zip(*outer_polygon)
-    ax.plot(outer_x + (outer_x[0],), outer_y + (outer_y[0],), 
-            'b-', linewidth=2, label='Outer Polygon (Bounding)')
+    # Calculate bounding box for proper viewBox
+    min_x = min(p[0] for p in outer_polygon) - 50
+    max_x = max(p[0] for p in outer_polygon) + 50
+    min_y = min(p[1] for p in outer_polygon) - 50
+    max_y = max(p[1] for p in outer_polygon) + 50
+    width = max_x - min_x
+    height = max_y - min_y
     
-    # Plot points
-    ax.plot(outer_x, outer_y, 'bo', markersize=3, alpha=0.7)
+    with open(svg_file, 'w') as f:
+        f.write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{min_x} {min_y} {width} {height}">\n')
+        
+        # Add grid (optional, for reference)
+        grid_size = 100
+        for x in range(int(min_x), int(max_x) + grid_size, grid_size):
+            f.write(f'    <line x1="{x}" y1="{min_y}" x2="{x}" y2="{max_y}" stroke="#f0f0f0" stroke-width="0.5"/>\n')
+        for y in range(int(min_y), int(max_y) + grid_size, grid_size):
+            f.write(f'    <line x1="{min_x}" y1="{y}" x2="{max_x}" y2="{y}" stroke="#f0f0f0" stroke-width="0.5"/>\n')
+        
+        # Outer polygon (blue, thin line)
+        outer_coords = ' '.join([f"{x},{y}" for x, y in outer_polygon])
+        f.write(f'    <polygon points="{outer_coords}" fill="none" stroke="blue" stroke-width="2" opacity="0.7"/>\n')
+        
+        # Add error message box
+        f.write(f'    <rect x="{min_x + 20}" y="{min_y + 20}" width="400" height="120" fill="red" opacity="0.1" stroke="red" stroke-width="1"/>\n')
+        f.write(f'    <text x="{min_x + 30}" y="{min_y + 45}" font-family="Arial" font-size="16" fill="red">❌ FAILURE: {error_message}</text>\n')
+        f.write(f'    <text x="{min_x + 30}" y="{min_y + 65}" font-family="Arial" font-size="12" fill="red">Execution Time: {elapsed_time:.2f}s</text>\n')
+        f.write(f'    <text x="{min_x + 30}" y="{min_y + 85}" font-family="Arial" font-size="12" fill="red">Point Limit: {MAX_POINTS_PER_POLYGON}</text>\n')
+        f.write(f'    <text x="{min_x + 30}" y="{min_y + 105}" font-family="Arial" font-size="12" fill="red">Time Limit: {MAX_TIME_SECONDS}s</text>\n')
+        
+        # Add title
+        f.write(f'    <text x="{min_x + 20}" y="{min_y + 150}" font-family="Arial" font-size="14" fill="black">❌ FAILURE: Fog-Based Polygon Generation</text>\n')
+        f.write(f'    <text x="{min_x + 20}" y="{min_y + 170}" font-family="Arial" font-size="12" fill="black">Segment Length: {SEGMENT_LENGTH}, Target Separation: {TARGET_SEPARATION}</text>\n')
+        
+        f.write('</svg>\n')
     
-    # Add center point (for reference)
-    ax.plot(500, 500, 'k*', markersize=10, label='Reference Point')
+    # Convert SVG to PNG using a simple approach (if available)
+    png_file = Path("temp", "test_generate_single_inner_polygon.png")
+    try:
+        # Try to use cairosvg if available for high-quality conversion
+        import cairosvg
+        cairosvg.svg2png(url=str(svg_file), write_to=str(png_file), output_width=1200, output_height=1000)
+        print(f"📊 PNG visualization saved to: {png_file} (using cairosvg)")
+    except ImportError:
+        # Fallback: just save SVG and inform user
+        print(f"📊 SVG visualization saved to: {svg_file}")
+        print("💡 To convert to PNG, install cairosvg: pip install cairosvg")
+        print("   Or open the SVG in a browser and save as PNG")
     
-    # Add error message as text
-    ax.text(0.02, 0.98, f'❌ FAILURE: {error_message}\n'
-                         f'Execution Time: {elapsed_time:.2f}s\n'
-                         f'Point Limit: {MAX_POINTS_PER_POLYGON}\n'
-                         f'Time Limit: {MAX_TIME_SECONDS}s',
-             transform=ax.transAxes, fontsize=12, verticalalignment='top',
-             bbox=dict(boxstyle='round', facecolor='red', alpha=0.3))
-    
-    # Labels and title
-    ax.set_xlabel('X Coordinate')
-    ax.set_ylabel('Y Coordinate')
-    ax.set_title(f'❌ FAILURE: Fog-Based Polygon Generation\n'
-                f'Segment Length: {SEGMENT_LENGTH}, Target Separation: {TARGET_SEPARATION}')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    ax.set_aspect('equal')
-    
-    # Save to project temp directory (not tests/temp/)
-    output_file = Path("..", "temp", "test_generate_single_inner_polygon.png")
-    output_file.parent.mkdir(exist_ok=True)
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    plt.close()
-    
-    print(f"📊 Failure visualization saved to: {output_file}")
+    print(f"📊 SVG visualization saved to: {svg_file}")
 
 if __name__ == "__main__":
     # Run the test
