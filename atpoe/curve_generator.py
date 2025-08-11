@@ -3,7 +3,7 @@ import math
 import random
 from PIL import Image, ImageDraw
 import io
-from .config_loader import load_config
+from atpoe.config_loader import load_config
 
 # Simple graphics bundle system
 class SimpleGraphicsBundle:

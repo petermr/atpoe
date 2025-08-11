@@ -6,7 +6,8 @@ Tests the find_next_point_at_distance strategy with pathological cases.
 import math
 import random
 from typing import List, Tuple
-from segment_length_algorithm import find_next_point_at_distance
+from atpoe.segment_algorithm import find_next_point_at_distance
+from atpoe.fog_polygon_generator import is_point_inside_polygon
 
 def test_find_next_point_pathologies():
     """Test find_next_point_at_distance with pathological curve shapes."""
@@ -129,8 +130,8 @@ def test_single_point_placement(outer_curve: List[Tuple[float, float]], start_po
             print(f"  Direction {direction:.2f}: Next point {next_point}, actual distance {actual_distance:.2f}")
             
             # Check if point is inside curve
-            from segment_length_algorithm import is_point_inside_curve
-            inside = is_point_inside_curve(next_point, outer_curve)
+            # from segment_length_algorithm import is_point_inside_curve
+            inside = is_point_inside_polygon(next_point, outer_curve)
             print(f"    Inside curve: {inside}")
         else:
             print(f"  Direction {direction:.2f}: No valid point found")

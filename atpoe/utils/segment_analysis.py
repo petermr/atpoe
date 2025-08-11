@@ -5,7 +5,7 @@ Helper functions for analyzing curve segments and lengths.
 
 import math
 from typing import List, Tuple, Dict, Any
-from ..config_loader import load_config
+from atpoe.config_loader import load_config
 
 def analyze_curve_segments(curve: List[Tuple[float, float]], target_length: float) -> Dict[str, Any]:
     """
