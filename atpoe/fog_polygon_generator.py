@@ -2,7 +2,7 @@
 Date: 2025-08-10
 Description: Fog-based polygon generation system for creating nested polygons
 """
-
+import logging
 import math
 import time
 from typing import List, Tuple, Optional
@@ -15,6 +15,12 @@ try:
 except ImportError:
     SHAPELY_AVAILABLE = False
     print("Warning: Shapely not available, using fallback geometry")
+
+logger = logging.getLogger(__name__)
+
+CLOSURE_THRESHOLD = 3
+MIN_POINTS = 10 # growing curve must have at least these many points
+MAX_ITERATIONS = 5000  # Prevent infinite loops
 
 
 def is_point_inside_polygon(point: Tuple[float, float], polygon: List[Tuple[float, float]]) -> bool:
@@ -381,12 +387,14 @@ def should_close_polygon(current_points: List[Tuple[float, float]], start_point:
     return distance_to_start <= segment_length * 0.2
 
 
-def generate_nested_polygon(previous_polygon: List[Tuple[float, float]], segment_length: float, 
+# OBSOLETE: This complex algorithm has been replaced with a simple one
+# Keeping for reference but should not be used
+def generate_nested_polygon_obsolete(previous_polygon: List[Tuple[float, float]], segment_length: float, 
                            target_separation: float, min_separation: float, max_separation: float, 
                            max_points: int = 100) -> List[Tuple[float, float]]:
     """
     Date: 2025-08-10
-    Description: Generate a single nested polygon using fog-based algorithm
+    Description: OBSOLETE - Complex fog-based algorithm (replaced with simple version)
     """
     if not previous_polygon or len(previous_polygon) < 3:
         return []
@@ -541,3 +549,148 @@ def generate_nested_polygons(initial_polygon: List[Tuple[float, float]], num_pol
             break
     
     return polygons
+
+# NEW SIMPLE IMPLEMENTATION
+def create_start_point(previous_polygon: List[Tuple[float, float]], target_separation: float) -> Tuple[float, float]:
+    """
+    Date: 2025-08-10
+    Description: Create start point by moving inward from first boundary point
+    """
+    if len(previous_polygon) < 3:
+        return None
+    
+    # Use points [-1, 0, 1] to create unit normal inwards
+    pt_prev = previous_polygon[-1]
+    pt_curr = previous_polygon[0]
+    pt_next = previous_polygon[1]
+    
+    # Calculate boundary direction
+    boundary_dx = pt_next[0] - pt_curr[0]
+    boundary_dy = pt_next[1] - pt_curr[1]
+    
+    # Perpendicular inward vector (rotate 90 degrees)
+    inward_x = -boundary_dy
+    inward_y = boundary_dx
+    
+    # Normalize to unit vector
+    length = math.hypot(inward_x, inward_y)
+    if length == 0:
+        return None
+    
+    inward_x /= length
+    inward_y /= length
+    
+    # Move inward by target_separation
+    start_x = pt_curr[0] + inward_x * target_separation
+    start_y = pt_curr[1] + inward_y * target_separation
+    
+    return (round(start_x, 2), round(start_y, 2))
+
+
+def create_smooth_closure(inner_points, start_point, segment_length):
+    logger.info(f"===== closure? ==== inner points {inner_points} start_point {start_point} segment_length {segment_length}")
+    raise ValueError("not closed")
+
+
+def generate_inner_curve(start_point: Tuple[float, float], previous_polygon: List[Tuple[float, float]],
+                        segment_length: float, target_separation: float, 
+                        min_separation: float, max_separation: float,
+                        max_closure=10.0, max_time=15.0) -> List[Tuple[float, float]]:
+    """
+    Date: 2025-08-10
+    Description: Generate inner curve following simple algorithm
+    """
+    inner_points = [start_point]
+    current_point = start_point
+    
+    # Continue adding points until we reach the end of the previous polygon
+    # or get within 3 segment lengths of start point
+
+    start_time = time.time()
+
+    check_time = True
+    check_time = False
+    for i in range(MAX_ITERATIONS):
+        # Check if we're within 3 segment lengths of start point
+        if check_time and time.time() - start_time > max_time:
+            raise ValueError(f"timed out: after {i} iterations")
+        if i > MIN_POINTS:
+            dx = current_point[0] - start_point[0]
+            dy = current_point[1] - start_point[1]
+            distance_to_start = math.hypot(dx, dy)
+            print(f"dist from {i} ({dx:.2f}, {dy:.2f}) to start {distance_to_start:.2f}")
+            if distance_to_start < max_closure:
+                logger.info(f"i {i} ({dx:.2f}, {dy:.2f}) distance_to_start {distance_to_start}")
+            if distance_to_start <= CLOSURE_THRESHOLD * segment_length:
+                # Create smooth closure
+                return create_smooth_closure(inner_points, start_point, segment_length)
+        
+        # Find next point at segment_length from current point
+        next_point = find_next_point_simple(current_point, previous_polygon, segment_length,
+                                         target_separation, min_separation, max_separation)
+        if i >= 329:
+            print(f"{i} {next_point}")
+            pass # for debugging
+        if i >= 334:
+            return inner_points
+        if next_point is None:
+            # Can't find next point, close the polygon
+            inner_points.append(start_point)
+            break
+        
+        inner_points.append(next_point)
+        current_point = next_point
+    
+    return inner_points
+
+def find_next_point_simple(current_point: Tuple[float, float], previous_polygon: List[Tuple[float, float]], 
+                          segment_length: float, target_separation: float, 
+                          min_separation: float, max_separation: float) -> Optional[Tuple[float, float]]:
+    """
+    Date: 2025-08-10
+    Description: Find next point maintaining segment_length and separation constraints
+    """
+    # Try different angles to find a valid next point
+    for angle_offset in range(0, 360, 15):  # Try every 15 degrees
+        angle_rad = math.radians(angle_offset)
+        direction_x = math.cos(angle_rad)
+        direction_y = math.sin(angle_rad)
+        
+        # Calculate candidate point at segment_length distance
+        candidate_x = current_point[0] + direction_x * segment_length
+        candidate_y = current_point[1] + direction_y * segment_length
+        candidate_point = (round(candidate_x, 2), round(candidate_y, 2))
+        
+        # Check constraints
+        if (is_point_inside_polygon(candidate_point, previous_polygon) and
+            not would_segment_cross_polygon(current_point, candidate_point, previous_polygon)):
+            
+            separation = calculate_distance_to_polygon(candidate_point, previous_polygon)
+            if min_separation <= separation <= max_separation:
+                return candidate_point
+    
+    return None
+
+def generate_nested_polygon(previous_polygon: List[Tuple[float, float]], segment_length: float, 
+                           target_separation: float, min_separation: float, max_separation: float, 
+                           max_points: int = 100,
+                           max_closure: float = 10.0) -> List[Tuple[float, float]]:
+    """
+    Date: 2025-08-10
+    Description: Generate a single nested polygon using simple algorithm
+    """
+    if not previous_polygon or len(previous_polygon) < 3:
+        logger.warning(f"polygon non-existent or too small {previous_polygon}")
+        return []
+    
+    # Create start point: move inward from first boundary point
+    start_point = create_start_point(previous_polygon, target_separation)
+    if not start_point:
+        logger.warning(f"cannot create start point")
+        return []
+    
+    # Generate the inner curve
+    inner_points = generate_inner_curve(start_point, previous_polygon, segment_length, 
+                                      target_separation, min_separation, max_separation, max_closure=max_closure)
+    
+    return inner_points
