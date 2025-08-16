@@ -4,7 +4,7 @@ import random
 from PIL import Image, ImageDraw
 import io
 from atpoe.config_loader import load_config
-from tests.test_fog_polygon_generation import Point2D
+# from tests.test_fog_polygon_generation import Point2D
 
 
 # Simple graphics bundle system
@@ -14,16 +14,16 @@ class SimpleGraphicsBundle:
         self.color = color
         self.width = width
 
-def generate_initial_circle(center: Point2D, radius: float, num_points: int = 50):
-    """Generate initial circular curve with fewer points to prevent hanging."""
-    points = []
-    for i in range(num_points):
-        angle = 2 * math.pi * i / num_points
-        x = center.x + radius * math.cos(angle)
-        y = center.y + radius * math.sin(angle)
-        point = Point2D(x, y)
-        points.append(point)
-    return points, y
+# def generate_initial_circle(center: Point2D, radius: float, num_points: int = 50):
+#     """Generate initial circular curve with fewer points to prevent hanging."""
+#     points = []
+#     for i in range(num_points):
+#         angle = 2 * math.pi * i / num_points
+#         x = center.x + radius * math.cos(angle)
+#         y = center.y + radius * math.sin(angle)
+#         point = Point2D(x, y)
+#         points.append(point)
+#     return points, y
 
 def generate_nested_curve_simple(outer_curve, distance: float, error: float, min_separation: float = 1.0, segment_length: float = 20.0):
     """

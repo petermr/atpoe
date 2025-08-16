@@ -591,6 +591,16 @@ def create_smooth_closure(inner_points, start_point, segment_length):
     logger.info(f"===== closure? ==== inner points {inner_points} start_point {start_point} segment_length {segment_length}")
     raise ValueError("not closed")
 
+# def generate_initial_circle(center: Point2D, radius: float, num_points: int = 50):
+#     """Generate initial circular curve with fewer points to prevent hanging."""
+#     points = []
+#     for i in range(num_points):
+#         angle = 2 * math.pi * i / num_points
+#         x = center.x + radius * math.cos(angle)
+#         y = center.y + radius * math.sin(angle)
+#         point = Point2D(x, y)
+#         points.append(point)
+#     return points, y
 
 def generate_inner_curve(start_point: Tuple[float, float], previous_polygon: List[Tuple[float, float]],
                         segment_length: float, target_separation: float, 

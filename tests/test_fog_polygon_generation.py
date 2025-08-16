@@ -10,7 +10,9 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from atpoe.curve_generator import generate_initial_circle
+# from atpoe.curve_generator import generate_initial_circle
+# from atpoe.fog_polygon_generator import generate_initial_circle
+
 from atpoe.fog_polygon_generator import (
     calculate_distance_to_polygon,
     generate_nested_polygon,
@@ -27,6 +29,8 @@ from atpoe.utils.visualization import (
     validate_direction_continuity,
 )
 
+def dummy():
+    pass
 
 # Bounding polygon function moved from initial_bounding_polygon.py
 R = 500
@@ -74,11 +78,14 @@ class Point2D:
             raise ValueError(f"bad distance {self.xy} {point}")
 
     def get_vector(self, point):
+        """
+        :param point: Point2D
+        """
         if point is None:
             return None
         if self.xy is None:
             return None
-        return (point[0] - self.xy[0], point[1] - self.xy[1])
+        return (point.xy[0] - self.xy[0], point.xy[1] - self.xy[1])
 
     def get_normal(self):
         if self.xy is None:
@@ -126,13 +133,22 @@ class PolygonGenerator:
         self.start_idx = start_idx
 
     def get_new_point_from_tangent(self, start_idx):
-        tangent = self.get_crude_tangent()
+        tangent = self.get_crude_tangent(self.outer_polygon, start_idx)
         normal = Point2D((tangent[1], -tangent[0])).normalize() # check
         start_point = self.outer_polygon[start_idx]
         new_point = Point2D(start_point).plus(normal.multiply(self.curve_separation))
         return new_point
 
-
+    def generate_initial_circle(center: Point2D, radius: float, num_points: int = 50):
+        """Generate initial circular curve with fewer points to prevent hanging."""
+        points = []
+        for i in range(num_points):
+            angle = 2 * math.pi * i / num_points
+            x = center[0] + radius * math.cos(angle)
+            y = center[1] + radius * math.sin(angle)
+            point = Point2D((x, y))
+            points.append(point)
+        return points, y
 
     def get_closest_point(self, current_point):
         """very crude - just to test"""
@@ -175,10 +191,10 @@ class PolygonGenerator:
         :param npoints: points in circle
         :param max_closure: distance less than which closure is reported
         """
-        self.outer_polygon = generate_initial_circle(center=(R, R), radius=R,
+        self.outer_polygon = PolygonGenerator.generate_initial_circle(center=(R, R), radius=R,
                                                 num_points=npoints)
         start_idx = 0
-        start_point = self.get_new_point_from_tangent(outer_polygon, start_idx, self.curve_separation)
+        start_point = self.get_new_point_from_tangent(start_idx)
 
     @classmethod
     def get_crude_tangent(cls, points, ipoint, window=2):
@@ -187,9 +203,9 @@ class PolygonGenerator:
         takes average slope of ipoint[-window]...ipoint[window]
         :return: (dx, dy)
         """
-        lowpt = points[ipoint - window]
+        lowpt = Point2D(points[ipoint - window])
         high = (ipoint + window) % len(points)
-        highpt = points[high]
+        highpt = Point2D(points[high])
         return highpt.get_vector(lowpt)
 
 
