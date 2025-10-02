@@ -17,6 +17,11 @@ dependencies = [
     "matplotlib",
     "PyYAML",
     "pytest",
+    "scikit-image",
+    "sknw",
+    "networkx",
+    "opencv-python",
+    "numpy",
 ]
 
 [project.optional-dependencies]

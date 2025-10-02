@@ -1,0 +1,23 @@
+# AtPoE Drawing Analysis Dependencies
+# Date: 2025-01-27 (system date of generation)
+
+# Core dependencies
+streamlit>=1.28.0
+Pillow>=9.0.0
+matplotlib>=3.5.0
+PyYAML>=6.0
+pytest>=7.0.0
+
+# Image processing and analysis
+scikit-image>=0.20.0
+opencv-python>=4.8.0
+numpy>=1.21.0
+
+# Skeleton analysis
+sknw>=0.11
+
+# Graph analysis
+networkx>=3.0
+
+# Optional: for future colored drawing support
+# octree (to be added when needed)
